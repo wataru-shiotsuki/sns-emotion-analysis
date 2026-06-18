@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="災害時SNS感情分析システム - 決定論的・10感情モデル版。CSVデータから災害時のSNS投稿感情を分析し、可視化します。">
+    <title>災害時SNS感情分析システム | 決定論的・10感情モデル版</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js?v=2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js?v=2"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">📊</span>
+                    <div class="logo-text">
+                        <h1>災害時SNS感情分析システム</h1>
+                        <span class="subtitle">決定論的・10感情モデル版</span>
+                    </div>
+                </div>
+                <div class="header-buttons">
+                    <button id="compareBtn" class="compare-btn" title="比較ダッシュボード">
+                        <span>📊</span> 比較
+                    </button>
+                    <button id="historyBtn" class="history-btn" title="分析履歴">
+                        <span>📂</span> 履歴
+                    </button>
+                    <button id="settingsBtn" class="settings-btn" title="API設定">
+                        <span>⚙️</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+        <main class="main-content">
+            <section id="uploadSection" class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <h2>CSVファイルをドロップ</h2>
+                    <p>または</p>
+                    <label class="upload-btn">
+                        ファイルを選択（複数可）
+                        <input type="file" id="fileInput" accept=".csv" multiple hidden>
+                    </label>
+                    <p class="upload-hint">対応形式: CSV（B列: 投稿日時, C列: テキスト）</p>
+                    <p class="upload-hint">📌 複数ファイル選択時：各ファイルを1フェーズとして分析</p>
+                    <p class="upload-hint">📌 単一ファイル選択時：自動的に3期間（初期・中期・後期）に分割</p>
+                    <div id="fileList" class="file-list"></div>
+                </div>
+            </section>
+            <section id="analysisSection" class="analysis-section hidden">
+                <div id="progressContainer" class="progress-container hidden">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <p id="progressText" class="progress-text">分析中... 0%</p>
+                </div>
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="charts">📊 分析結果</button>
+                    <button class="tab-btn" data-tab="report">🤔 WHY分析</button>
+                    <button class="tab-btn" data-tab="broadcast">📻 放送原稿</button>
+                    <button class="tab-btn" data-tab="data">📋 データ</button>
+                    <button id="saveResultBtn" class="save-result-btn">💾 結果を保存</button>
+                </div>
+                <div class="tab-content">
+                    <div id="chartsTab" class="tab-panel active">
+                        <div class="charts-single">
+                            <div class="chart-card chart-card-full">
+                                <h3>感情シェアの推移（積上げ棒グラフ）</h3>
+                                <div class="chart-container chart-container-large">
+                                    <canvas id="stackedBarChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="phase-legend" id="phaseLegend"></div>
+                        <div class="charts-single" style="margin-top: 2rem;">
+                            <div class="chart-card chart-card-full">
+                                <h3>📈 感情推移ライングラフ（時系列変化）</h3>
+                                <div class="chart-container chart-container-large">
+                                    <canvas id="emotionLineChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="detailedStatsContainer" style="margin-top: 3rem;">
+                            <div id="intensityStats" class="stats-section"></div>
+                            <div id="phaseDetailStats" class="stats-section" style="margin-top: 2rem;"></div>
+                            <div id="allPhaseComparison" class="stats-section" style="margin-top: 2rem;"></div>
+                        </div>
+                    </div>
+                    <div id="reportTab" class="tab-panel">
+                        <div class="report-container">
+                            <div class="report-section">
+                                <h3>📌 WHY分析 (トリガー・社会的要因)</h3>
+                                <div id="pastAnalysis" class="report-content">
+                                    <p class="placeholder">分析結果がここに表示されます...</p>
+                                </div>
+                            </div>
+                            <div class="report-section"
+                                style="margin-top: 2rem; border-top: 2px solid #D7CCC8; padding-top: 1.5rem;">
+                                <h3>✅ 整合性検証（自動バリデーション）</h3>
+                                <p style="font-size: 0.85em; color: #6D4C41; margin-bottom: 1rem;">
+                                    感情ラベルの精度と要因分析の整合性を、AIによる自動検証で確認します。
+                                </p>
+                                <button id="runValidationBtn" class="btn-primary" style="margin-bottom: 1rem;" disabled>
+                                    🔍 自動検証を実行
+                                </button>
+                                <div id="validationProgress" style="display:none; margin-bottom: 1rem;">
+                                    <div class="progress-bar">
+                                        <div id="validationProgressFill" class="progress-fill" style="width:0%"></div>
+                                    </div>
+                                    <p id="validationProgressText" class="progress-text" style="font-size:0.85em;">
+                                        検証中...</p>
+                                </div>
+                                <div id="validationResults" style="display:none;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="broadcastTab" class="tab-panel">
+                        <div class="broadcast-info">
+                            <span class="info-icon">📻</span>
+                            <span>各期間ごとに放送原稿（約60秒・300字）と表現変換ログを生成します。</span>
+                        </div>
+                        <div id="broadcastPhasesContainer" class="broadcast-phases-container">
+                            <p class="placeholder">分析完了後に各期間の放送原稿がここに表示されます...</p>
+                        </div>
+                    </div>
+                    <div id="dataTab" class="tab-panel">
+                        <div class="data-controls">
+                            <button id="exportBtn" class="export-btn">📥 CSVエクスポート</button>
+                            <button id="exportHtmlBtn" class="export-btn export-html-btn">📄 HTMLレポート保存</button>
+                            <span id="dataCount" class="data-count"></span>
+                        </div>
+                        <div class="score-explanation">
+                            <span class="info-icon">ℹ️</span>
+                            <span>スコア詳細：AIが検出した感情の確信度を表します。合計100%になるよう正規化されています。</span>
+                        </div>
+                        <div class="table-container">
+                            <table id="dataTable">
+                                <thead>
+                                    <tr>
+                                        <th>投稿日時</th>
+                                        <th>テキスト <span class="click-hint">（クリックで全文表示）</span></th>
+                                        <th>フェーズ</th>
+                                        <th>主要感情</th>
+                                        <th>強度</th>
+                                        <th>複合感情</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        <div id="settingsModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⚙️ API設定</h2>
+                    <button id="closeModal" class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="apiKey">Gemini API キー</label>
+                        <input type="password" id="apiKey" placeholder="AIza...">
+                        <p class="form-hint">
+                            <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
+                            で無料で取得できます
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label for="phaseThreshold">フェーズ分割閾値（時間）</label>
+                        <input type="number" id="phaseThreshold" value="6" min="1" max="72">
+                        <p class="form-hint">この時間以上の空白で新しいフェーズに分割</p>
+                    </div>
+                    <button id="saveSettings" class="save-btn">保存</button>
+                </div>
+            </div>
+        </div>
+        <div id="textDetailModal" class="modal hidden">
+            <div class="modal-content modal-content-large">
+                <div class="modal-header">
+                    <h2>📝 投稿詳細</h2>
+                    <button id="closeTextModal" class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="detail-row">
+                        <span class="detail-label">投稿日時:</span>
+                        <span id="detailDatetime" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">フェーズ:</span>
+                        <span id="detailPhase" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">主要感情:</span>
+                        <span id="detailEmotion" class="detail-value"></span>
+                    </div>
+                    <div class="detail-section">
+                        <span class="detail-label">テキスト全文:</span>
+                        <div id="detailText" class="detail-text-content"></div>
+                    </div>
+                    <div class="detail-section">
+                        <span class="detail-label">感情スコア詳細:</span>
+                        <div id="detailScores" class="detail-scores"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="historyModal" class="modal hidden">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2>📂 分析履歴</h2>
+                    <button id="closeHistoryModal" class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="history-actions">
+                        <button id="clearAllHistory" class="btn-danger">🗑️ 全履歴を削除</button>
+                    </div>
+                    <div class="category-filter history-category-filter">
+                        <button class="history-filter-btn active" data-category="all">すべて</button>
+                        <button class="history-filter-btn" data-category="manmade">🔥 人災</button>
+                        <button class="history-filter-btn" data-category="naturalfire">🌲🔥 自然火災</button>
+                        <button class="history-filter-btn" data-category="earthquake">🌏 地震</button>
+                        <button class="history-filter-btn" data-category="heavyrain">🌧️ 豪雨</button>
+                        <button class="history-filter-btn" data-category="other">⚪ その他</button>
+                    </div>
+                    <div id="historyList" class="history-list">
+                        <p class="no-history">保存された分析履歴がありません。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="saveModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>💾 分析を保存</h2>
+                    <button id="closeSaveModal" class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="analysisName">分析名:</label>
+                        <input type="text" id="analysisName" placeholder="例: 青森地震_12月8日">
+                    </div>
+                    <div class="form-group">
+                        <label for="analysisCategory">カテゴリ:</label>
+                        <select id="analysisCategory" class="category-select">
+                            <option value="manmade">🔥 人災</option>
+                            <option value="naturalfire">🌲🔥 自然火災</option>
+                            <option value="earthquake">🌏 地震</option>
+                            <option value="heavyrain">🌧️ 豪雨</option>
+                            <option value="other">⚪ その他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="saveToFile" checked>
+                            ファイルにも保存（JSONダウンロード）
+                        </label>
+                    </div>
+                    <button id="confirmSave" class="btn-primary">保存</button>
+                </div>
+            </div>
+        </div>
+        <div id="comparisonModal" class="modal hidden">
+            <div class="modal-content modal-xlarge">
+                <div class="modal-header">
+                    <h2>📊 比較ダッシュボード</h2>
+                    <button id="closeComparisonModal" class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="comparison-selection">
+                        <h3>比較対象を選択（最大8件）</h3>
+                        <div class="category-filter">
+                            <button class="category-filter-btn active" data-category="all">すべて</button>
+                            <button class="category-filter-btn" data-category="manmade">🔥 人災</button>
+                            <button class="category-filter-btn" data-category="naturalfire">🌲🔥 自然火災</button>
+                            <button class="category-filter-btn" data-category="earthquake">🌏 地震</button>
+                            <button class="category-filter-btn" data-category="heavyrain">🌧️ 豪雨</button>
+                            <button class="category-filter-btn" data-category="other">⚪ その他</button>
+                        </div>
+                        <div class="selection-actions" style="margin-top: 10px; text-align: right;">
+                            <button id="selectAllCategoryBtn" class="btn-secondary btn-small"
+                                style="font-size: 0.8rem; padding: 4px 10px;">表示中を全選択</button>
+                            <button id="deselectAllBtn" class="btn-secondary btn-small"
+                                style="font-size: 0.8rem; padding: 4px 10px; margin-left: 5px;">全解除</button>
+                        </div>
+                        <div id="comparisonList" class="comparison-list">
+                            <p class="no-history">保存された分析がありません。</p>
+                        </div>
+                        <button id="runComparison" class="btn-primary" disabled>選択した分析を比較</button>
+                    </div>
+                    <div id="comparisonResults" class="comparison-results hidden">
+                        <h3>比較結果</h3>
+                        <div class="comparison-charts-grid" id="comparisonChartsGrid">
+                        </div>
+                        <div class="comparison-table-container">
+                            <h4>感情分布比較</h4>
+                            <table id="comparisonTable" class="comparison-table">
+                                <thead id="comparisonTableHead"></thead>
+                                <tbody id="comparisonTableBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="time-normalized-section">
+                            <div class="time-normalized-header">
+                                <h4>🎨 感情ヒートマップ（色の濃さ＝強さ）</h4>
+                                <div class="emotion-axis-selectors" id="emotionAxisSelectors">
+                                    <div class="axis-selector">
+                                        <label for="emotion1">感情1:</label>
+                                        <select id="emotion1" class="emotion-select">
+                                            <option value="FEAR" selected>🌪️ 恐怖</option>
+                                            <option value="SHOCK">😲 衝撃</option>
+                                            <option value="ANXIETY">😰 不安</option>
+                                            <option value="WORRY">😟 心配</option>
+                                            <option value="SADNESS">💧 悲しみ</option>
+                                            <option value="ANGER">🔥 怒り</option>
+                                            <option value="DISGUST">🤢 嫌悪</option>
+                                            <option value="SOLIDARITY">💪 連帯</option>
+                                            <option value="RELIEF">😌 安堵</option>
+                                            <option value="FACTUAL">📊 冷静</option>
+                                        </select>
+                                    </div>
+                                    <div class="axis-selector">
+                                        <label for="emotion2">感情2:</label>
+                                        <select id="emotion2" class="emotion-select">
+                                            <option value="FEAR">🌪️ 恐怖</option>
+                                            <option value="SHOCK">😲 衝撃</option>
+                                            <option value="ANXIETY">😰 不安</option>
+                                            <option value="WORRY" selected>😟 心配</option>
+                                            <option value="SADNESS">💧 悲しみ</option>
+                                            <option value="ANGER">🔥 怒り</option>
+                                            <option value="DISGUST">🤢 嫌悪</option>
+                                            <option value="SOLIDARITY">💪 連帯</option>
+                                            <option value="RELIEF">😌 安堵</option>
+                                            <option value="FACTUAL">📊 冷静</option>
+                                        </select>
+                                    </div>
+                                    <div class="axis-selector">
+                                        <label for="emotion3">感情3:</label>
+                                        <select id="emotion3" class="emotion-select">
+                                            <option value="FEAR">🌪️ 恐怖</option>
+                                            <option value="SHOCK">😲 衝撃</option>
+                                            <option value="ANXIETY">😰 不安</option>
+                                            <option value="WORRY">😟 心配</option>
+                                            <option value="SADNESS" selected>💧 悲しみ</option>
+                                            <option value="ANGER">🔥 怒り</option>
+                                            <option value="DISGUST">🤢 嫌悪</option>
+                                            <option value="SOLIDARITY">💪 連帯</option>
+                                            <option value="RELIEF">😌 安堵</option>
+                                            <option value="FACTUAL">📊 冷静</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="heatmapContainer" class="heatmap-container">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <footer class="footer">
+            <p>再現性100%保証 | Temperature=0 決定論的分析</p>
+        </footer>
+    </div>
+    <script src="gemini_api.js?v=2"></script>
+    <script src="main.js?v=2"></script>
+</body>
+</html>

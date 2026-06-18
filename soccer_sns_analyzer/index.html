@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サッカー放送支援システム</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">⚽</span>
+                    <div class="logo-text">
+                        <h1>サッカー放送支援システム</h1>
+                        <span class="subtitle">感情分布→行動方針提案</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="regenerateBtn" class="regenerate-btn disabled" title="指針・原稿を再生成">
+                        <span>🔄 生成やり直し</span>
+                    </button>
+                    <button id="historyBtn" class="history-btn" title="履歴">
+                        <span>📚</span>
+                    </button>
+                    <button id="settingsBtn" class="settings-btn" title="API設定">
+                        <span>⚙️</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+        <main class="main-content">
+            <section id="uploadSection" class="upload-section">
+                <div class="match-info-card">
+                    <h3>📅 試合情報</h3>
+                    <div class="match-info-grid">
+                        <div class="match-input-group">
+                            <label for="matchDate">試合日</label>
+                            <input type="date" id="matchDate">
+                        </div>
+                        <div class="match-input-group">
+                            <label for="kickoffTime">キックオフ時刻</label>
+                            <input type="time" id="kickoffTime" value="19:00">
+                        </div>
+                        <div class="match-input-group">
+                            <label for="matchTitle">試合名</label>
+                            <input type="text" id="matchTitle" placeholder="例: 日本vsブラジル">
+                        </div>
+                    </div>
+                </div>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p class="upload-text">CSVファイルをここにドラッグ＆ドロップ</p>
+                    <p class="upload-subtext">またはクリックして選択</p>
+                    <label class="upload-btn">
+                        ファイルを選択
+                        <input type="file" id="fileInput" accept=".csv" multiple hidden>
+                    </label>
+                    <div id="fileList" class="file-list"></div>
+                </div>
+            </section>
+            <section id="analysisSection" class="analysis-section hidden">
+                <div id="progressContainer" class="progress-container hidden">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p class="progress-text" id="progressText">分析中...</p>
+                </div>
+                <div class="data-count-display">
+                    <span>📊 分析データ: </span><span id="dataCount">0件</span>
+                </div>
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="charts">📊 感情分布</button>
+                    <button class="tab-btn" data-tab="guidance">🎯 行動指針</button>
+                    <button class="tab-btn" data-tab="broadcast">📝 放送原稿</button>
+                    <button class="tab-btn" data-tab="data">📋 全データ</button>
+                    <button id="saveResultBtn" class="save-result-btn">💾 保存</button>
+                </div>
+                <div class="tab-content">
+                    <div id="chartsTab" class="tab-panel active">
+                        <div class="tab-header-actions"
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <div class="phase-legend" id="phaseLegend" style="margin-bottom: 0;"></div>
+                            <button id="regenerateAnalysisBtn" class="export-btn"
+                                style="background: var(--primary); color: white; border: none;">
+                                🔄 感情・意見分析をやり直す
+                            </button>
+                        </div>
+                        <div class="charts-grid">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h3>📊 時間区分別 感情分布</h3>
+                                </div>
+                                <div class="chart-body">
+                                    <canvas id="emotionStackedChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h3>📈 感情推移</h3>
+                                </div>
+                                <div class="chart-body">
+                                    <canvas id="emotionLineChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="charts-grid" style="margin-top: 2rem;">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h3>📊 時間区分別 意見カテゴリ分布</h3>
+                                </div>
+                                <div class="chart-body">
+                                    <canvas id="opinionStackedChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h3>📈 意見推移</h3>
+                                </div>
+                                <div class="chart-body">
+                                    <canvas id="opinionLineChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="phaseStats" class="phase-stats"></div>
+                    </div>
+                    <div id="guidanceTab" class="tab-panel">
+                        <div class="guidance-container">
+                            <div class="tab-header-actions"
+                                style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                                <button id="regenerateGuidanceBtn" class="export-btn"
+                                    style="background: var(--primary); color: white; border: none;">
+                                    🔄 行動指針を作り直す
+                                </button>
+                            </div>
+                            <div id="guidanceContainer" class="action-guidelines">
+                                <div class="placeholder">分析完了後に行動方針がここに表示されます...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="broadcastTab" class="tab-panel">
+                        <div class="broadcast-container">
+                            <div class="tab-header-actions"
+                                style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                                <button id="regenerateBroadcastBtn" class="export-btn"
+                                    style="background: var(--primary); color: white; border: none;">
+                                    🔄 放送原稿を作り直す
+                                </button>
+                            </div>
+                            <div class="broadcast-section">
+                                <h2>📝 放送原稿</h2>
+                                <div id="broadcastContent" class="broadcast-content">
+                                    <div class="placeholder">放送原稿がここに表示されます...</div>
+                                </div>
+                            </div>
+                            <div class="broadcast-section">
+                                <h2>🔄 変換ログ</h2>
+                                <div id="conversionLog">
+                                    <div class="placeholder">変換ログがここに表示されます...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="dataTab" class="tab-panel">
+                        <div class="data-controls">
+                            <button id="exportBtn" class="export-btn">📥 CSVエクスポート</button>
+                            <button id="exportHtmlBtn" class="export-btn">📄 HTMLレポート保存</button>
+                            <div class="data-count">データ件数: <span id="dataCount">0</span>件</div>
+                        </div>
+                        <div class="table-container">
+                            <table id="dataTable">
+                                <thead>
+                                    <tr>
+                                        <th>投稿日時</th>
+                                        <th>区分</th>
+                                        <th>感情</th>
+                                        <th>本文</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div id="textDetailModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔍 投稿詳細</h2>
+                <button id="closeTextModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body post-detail">
+                <div class="detail-meta">
+                    <span id="detailDatetime"></span>
+                    <span id="detailPhase" class="badge"></span>
+                    <span id="detailEmotion" class="badge"></span>
+                </div>
+                <div id="detailText" class="detail-text"></div>
+                <div id="detailScores" class="detail-scores"></div>
+            </div>
+        </div>
+    </div>
+    <div id="settingsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ API設定</h2>
+                <button id="closeModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="apiKey">Gemini API Key</label>
+                    <input type="password" id="apiKey" placeholder="AIza...">
+                    <small>Gemini APIキーを入力してください</small>
+                </div>
+            </div>
+            <button id="saveSettings" class="save-btn">保存</button>
+        </div>
+    </div>
+    <div id="historyModal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>📚 分析履歴</h2>
+                <button id="closeHistoryModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="historyList" class="history-list">
+                    <p class="placeholder">履歴がありません</p>
+                </div>
+                <button id="clearAllHistory" class="danger-btn">すべての履歴を削除</button>
+            </div>
+        </div>
+    </div>
+    <div id="saveModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💾 分析結果を保存</h2>
+                <button id="closeSaveModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="analysisName">分析名</label>
+                    <input type="text" id="analysisName" placeholder="例: 日本vsブラジル">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="saveToFile"> JSONファイルにも保存
+                    </label>
+                </div>
+            </div>
+            <button id="confirmSave" class="save-btn" style="margin-top: 15px;">保存</button>
+        </div>
+    </div>
+    <script src="broadcasting_standards.js"></script>
+    <script src="gemini_api.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
