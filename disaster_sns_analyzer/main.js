@@ -1,4 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+    // 旧版で保存された HTML を復元する際も、表示用の要素だけを残す。
+    const safeSavedHtml = html => {
+        const template = document.createElement('template');
+        template.innerHTML = html;
+        const allowed = new Set(['DIV', 'P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+            'STRONG', 'EM', 'BR', 'UL', 'OL', 'LI', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH']);
+        template.content.querySelectorAll('*').forEach(element => {
+            if (!allowed.has(element.tagName)) {
+                element.replaceWith(document.createTextNode(element.textContent));
+                return;
+            }
+            [...element.attributes].forEach(attribute => {
+                if (attribute.name !== 'class') element.removeAttribute(attribute.name);
+            });
+        });
+        return template.innerHTML;
+    };
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
     const fileList = document.getElementById('fileList');
@@ -124,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasOpinion) {
             return false;
         }
-        const hasUrl = /https?:\/\/|t\.co\
+        const hasUrl = /https?:\/\/|t\.co\//i.test(text);
         if (hasUrl) {
             if (textWithoutUrls.length >= 20) {
                 return false;
@@ -294,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         fileList.innerHTML = selectedFiles.map((file, index) => `
             <div class="file-list-item">
-                <span class="file-name">📄 ${file.name}</span>
+                <span class="file-name">📄 ${escapeHtml(file.name)}</span>
                 <span class="file-size">${formatFileSize(file.size)}</span>
             </div>
         `).join('');
@@ -402,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function showSaveModal() {
         const topic = GeminiAnalyzer.currentTopicData?.topic || '';
-        const date = new Date().toLocaleDateString('ja-JP').replace(/\
+        const date = new Date().toLocaleDateString('ja-JP').replace(/\//g, '-');
         analysisNameInput.value = topic ? `${topic.substring(0, 20)}_${date}` : `分析_${date}`;
         saveModal.classList.remove('hidden');
     }
@@ -497,10 +517,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return `
                 <div class="history-item" data-id="${item.id}">
                     <div class="history-info">
-                        <div class="history-name">${item.name}</div>
+                        <div class="history-name">${escapeHtml(item.name)}</div>
                         <div class="history-meta">
                             <span class="category-badge ${item.category || 'other'}">${cat.emoji} ${cat.name}</span>
-                            ${item.count}件 | ${item.topic ? item.topic.substring(0, 30) + '...' : 'トピック未設定'}
+                            ${escapeHtml(item.count)}件 | ${escapeHtml(item.topic ? item.topic.substring(0, 30) + '...' : 'トピック未設定')}
                             <br>${new Date(item.savedAt).toLocaleString('ja-JP')}
                         </div>
                     </div>
@@ -530,12 +550,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderCharts();
                 renderDataTable();
                 if (item.reportContent) {
-                    pastAnalysis.innerHTML = item.reportContent;
+                    pastAnalysis.innerHTML = safeSavedHtml(item.reportContent);
                 } else {
                     pastAnalysis.innerHTML = '<p class="placeholder">履歴から復元しました。レポートデータはありません。</p>';
                 }
                 if (item.broadcastContent) {
-                    broadcastPhasesContainer.innerHTML = item.broadcastContent;
+                    broadcastPhasesContainer.innerHTML = safeSavedHtml(item.broadcastContent);
                 } else {
                     broadcastPhasesContainer.innerHTML = '<p class="placeholder">履歴から復元しました。放送原稿データはありません。</p>';
                 }
@@ -596,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dialog.innerHTML = `
                 <div class="category-change-content">
                     <h3>📁 カテゴリ変更</h3>
-                    <p>「${item.name}」のカテゴリを選択:</p>
+                    <p>「${escapeHtml(item.name)}」のカテゴリを選択:</p>
                     <select id="newCategorySelect" class="category-select">
                         ${catOptions}
                     </select>
@@ -824,7 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <div class="phase-legend-item">
                     <span class="phase-legend-color" style="background: ${getPhaseColor(index)}"></span>
-                    <span>${phase.name}: ${phase.posts.length}件 (${startDate} ～ ${endDate})</span>
+                    <span>${escapeHtml(phase.name)}: ${phase.posts.length}件 (${startDate} ～ ${endDate})</span>
                 </div>
             `;
         }).join('');
@@ -973,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             .sort((a, b) => b[1] - a[1])
                             .map(([emo, count]) => {
                                 const name = GeminiAnalyzer.EMOTIONS[emo]?.name || emo;
-                                return `${name}:${count}`;
+                                return `${escapeHtml(name)}:${count}`;
                             })
                             .join(', ');
                         secondaryDisplay = `<span class="stat-sub-detail" style="font-size: 0.8em; color: var(--text-muted); display: block; line-height: 1.2;">複合: ${secondaryPosts.length}件 (${breakdown})</span>`;
@@ -1003,7 +1023,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <div class="phase-card">
                     <div class="phase-header">
-                        <h4>${ps.name}</h4>
+                        <h4>${escapeHtml(ps.name)}</h4>
                         <span class="phase-count">${ps.totalPosts}件</span>
                     </div>
                     <div class="emotion-list">
@@ -1022,7 +1042,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${phaseCardsHTML}
             </div>
         `;
-        const headerCells = phaseStats.map(ps => `<th>${ps.name}</th>`).join('');
+        const headerCells = phaseStats.map(ps => `<th>${escapeHtml(ps.name)}</th>`).join('');
         const comparisonRows = emotionKeys.map(key => {
             const info = GeminiAnalyzer.EMOTIONS[key];
             const cells = phaseStats.map(ps => `<td>${ps.emotionDist[key].pct}%</td>`).join('');
@@ -1065,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const reportPromises = [
             GeminiAnalyzer.generatePastAnalysisReport(phasesWithEmotions, apiKey)
                 .then(report => {
-                    pastAnalysis.innerHTML = `<p>${report.replace(/\n/g, '</p><p>')}</p>`;
+                    pastAnalysis.innerHTML = `<p>${escapeHtml(report).replace(/\n/g, '</p><p>')}</p>`;
                 })
                 .catch(err => {
                     pastAnalysis.innerHTML = '<p class="placeholder">生成できませんでした</p>';
@@ -1090,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         broadcastPhasesContainer.innerHTML = phasesWithEmotions.map((phase, index) => `
             <div class="phase-broadcast-card" id="phaseCard${index}">
                 <div class="phase-broadcast-header">
-                    <h3>📻 ${phase.name}</h3>
+                    <h3>📻 ${escapeHtml(phase.name)}</h3>
                     <span class="phase-post-count">${phase.posts.length}件の投稿</span>
                 </div>
                 <div class="phase-broadcast-content">
@@ -1127,7 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const scriptEl = document.getElementById(`script${index}`);
             if (scriptEl) {
-                let highlightedScript = generatedScript.replace(/\n/g, '<br>'); 
+                let highlightedScript = escapeHtml(generatedScript).replace(/\n/g, '<br>');
                 if (scriptEl && scriptEl.parentElement) {
                     let logContainer = scriptEl.parentElement.querySelector('.conversion-log-container');
                     if (!logContainer) {
@@ -1143,10 +1163,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         conversionData.sort((a, b) => b.after.length - a.after.length);
                         conversionData.forEach(conv => {
                             if (!conv.after) return;
-                            const escapedAfter = conv.after.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            const escapedAfter = escapeHtml(conv.after).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                             const regex = new RegExp(escapedAfter, 'g');
-                            const safeBefore = (conv.before || '').replace(/"/g, '&quot;');
-                            const safeReason = (conv.reason || '').replace(/"/g, '&quot;');
                             const safeStandard = (conv.standardType || 'ethics');
                             let standardBadge = '放送倫理';
                             if (safeStandard === 'minporen') standardBadge = '民放連基準';
@@ -1165,11 +1183,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                    </div>
                                    <div class="tooltip-row">
                                        <span class="tooltip-label">SNS原文:</span>
-                                       <span class="tooltip-value before-text">${conv.before}</span>
+                                        <span class="tooltip-value before-text">${escapeHtml(conv.before)}</span>
                                    </div>
                                    <div class="tooltip-row">
                                        <span class="tooltip-label">変換理由:</span>
-                                       <span class="tooltip-value">${conv.reason}</span>
+                                        <span class="tooltip-value">${escapeHtml(conv.reason)}</span>
                                    </div>
                                 `;
                                 logContainer.appendChild(logCard);
@@ -1194,15 +1212,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                    </div>
                                    <div class="tooltip-row">
                                        <span class="tooltip-label">SNS原文:</span>
-                                       <span class="tooltip-value before-text">${conv.before}</span>
+                                        <span class="tooltip-value before-text">${escapeHtml(conv.before)}</span>
                                    </div>
                                    <div class="tooltip-row">
                                            <span class="tooltip-label">変換後の表現:</span>
-                                           <span class="tooltip-value" style="color:#2dd4bf; font-weight:bold;">${conv.after}</span>
+                                            <span class="tooltip-value" style="color:#2dd4bf; font-weight:bold;">${escapeHtml(conv.after)}</span>
                                    </div>
                                    <div class="tooltip-row">
                                        <span class="tooltip-label">変換理由:</span>
-                                       <span class="tooltip-value">${conv.reason}</span>
+                                        <span class="tooltip-value">${escapeHtml(conv.reason)}</span>
                                    </div>
                                `;
                                 logContainer.appendChild(logCard);
@@ -1661,7 +1679,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="checkbox" ${isSelected ? 'checked' : ''} />
                     <div class="comparison-item-info">
                         <div class="comparison-item-name">
-                            ${item.name}
+                            ${escapeHtml(item.name)}
                             <span class="category-badge ${item.category || 'other'}">${cat.emoji} ${cat.name}</span>
                         </div>
                         <div class="comparison-item-meta">
@@ -1720,7 +1738,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                     <div class="comparison-row">
                         <div class="comparison-row-label" style="border-left: 4px solid ${color}">
-                            ${item.name}
+                            ${escapeHtml(item.name)}
                         </div>
                         ${phaseNames.map((phase, phaseIdx) => `
                             <div class="comparison-chart-cell">
@@ -1831,11 +1849,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 return `
                     <div class="comparison-item ${isSelected ? 'selected' : ''}" onclick="toggleComparisonSelect('${item.id}')">
                         <div class="comparison-item-header">
-                            <span class="comparison-item-title">${item.name || '無題の分析'}</span>
+                            <span class="comparison-item-title">${escapeHtml(item.name || '無題の分析')}</span>
                             <span class="comparison-item-date">${dateDisplay}</span>
                         </div>
                         <div class="comparison-item-meta">
-                            <span>${categoryInfo.icon} ${categoryInfo.label}</span>
+                            <span>${categoryInfo.icon} ${escapeHtml(categoryInfo.label)}</span>
                             <span>データ数: ${item.analyzedData ? item.analyzedData.length : 0}</span>
                         </div>
                     </div>
@@ -1880,7 +1898,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let headerHtml = '<tr><th>感情</th>';
         selectedForComparison.forEach((item, idx) => {
             const color = COMPARISON_COLORS[idx % COMPARISON_COLORS.length];
-            headerHtml += `<th colspan="3" style="border-top: 3px solid ${color}; color: ${color}">${item.name}</th>`;
+            headerHtml += `<th colspan="3" style="border-top: 3px solid ${color}; color: ${color}">${escapeHtml(item.name)}</th>`;
         });
         headerHtml += '</tr><tr><th></th>';
         selectedForComparison.forEach(() => {
@@ -1926,8 +1944,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         comparisonResults.classList.remove('hidden');
         renderComparisonTable();
-        try {
-            renderHeatmap();
+        renderHeatmap();
         comparisonResults.scrollIntoView({ behavior: 'smooth' });
     }
     function renderHeatmap() {
@@ -1983,7 +2000,7 @@ document.addEventListener('DOMContentLoaded', () => {
         html += '<tbody>';
         selectedForComparison.forEach((item, itemIdx) => {
             const itemColor = COMPARISON_COLORS[itemIdx % COMPARISON_COLORS.length];
-            html += `<tr><td class="heatmap-row-header" style="border-left: 5px solid ${itemColor}">${item.name}</td>`;
+            html += `<tr><td class="heatmap-row-header" style="border-left: 5px solid ${itemColor}">${escapeHtml(item.name)}</td>`;
             selectedEmotions.forEach(emotion => {
                 const info = GeminiAnalyzer.EMOTIONS[emotion] || { color: '#888' };
                 const localMax = maxValues[emotion]; // Max value for this emotion column
@@ -2055,15 +2072,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const intensityStars = isFactual ? '-' : ('★'.repeat(intensity) + '☆'.repeat(5 - intensity));
             return `
                 <tr>
-                    <td>${formatDate(post.datetime)}</td>
-                    <td class="text-cell" onclick="showTextDetail(${idx})">${post.text?.substring(0, 50)}${post.text?.length > 50 ? '...' : ''}</td>
-                    <td>${post.phase || ''}</td>
+                    <td>${escapeHtml(formatDate(post.datetime))}</td>
+                    <td class="text-cell" onclick="showTextDetail(${idx})"></td>
+                    <td>${escapeHtml(post.phase || '')}</td>
                     <td><span style="color: ${emotionInfo.color}">${emotionInfo.emoji} ${emotionInfo.name}</span></td>
                     <td class="intensity-cell"><span class="intensity-stars" style="color: ${emotionInfo.color}">${intensityStars}</span></td>
                     <td>${!isFactual && secondaryInfo ? `<span style="color: ${secondaryInfo.color}">${secondaryInfo.emoji} ${secondaryInfo.name}</span>` : '<span class="no-secondary">-</span>'}</td>
                 </tr>
             `;
         }).join('');
+        dataTableBody.querySelectorAll('.text-cell').forEach((cell, idx) => {
+            const postText = analyzedData[idx].text || '';
+            cell.textContent = postText.substring(0, 50) + (postText.length > 50 ? '...' : '');
+        });
         if (dataCount) {
             dataCount.textContent = `${analyzedData.length}件`;
         }
@@ -2189,12 +2210,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 validationProgressFill.style.width = '20%';
                 validationProgressText.textContent = '検証①: 感情分類の妥当性を審査中...';
                 const labelResult = await GeminiAnalyzer.validateEmotionLabels(phases, apiKey);
-                if (labelResult.details) {
-                    console.groupCollapsed('🔍 検証① 詳細レポート（全30件の判定結果）');
-                        `[${d.match ? '✅' : '❌'}] 元:${d.original} -> 新:${d.reClassified || '-'}\n   理由: ${d.reason}\n   投稿: ${d.text}`
-                    ).join('\n\n'));
-                    console.groupEnd();
-                }
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 validationProgressFill.style.width = '50%';
                 validationProgressText.textContent = '検証②: 数値から要因を逆推定中...';
@@ -2236,8 +2251,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         const periodCards = (factorResult.periodResults || []).map(pr => `
             <div style="flex:1; min-width:80px; background:#EFEBE9; padding:8px; border-radius:6px; text-align:center;">
-                <div style="font-size:0.8em; font-weight:bold; color:#5D4037;">${pr.period}</div>
-                <div style="font-size:1.4em; font-weight:bold; color:${getScoreColor(pr.score)};">${pr.score}%</div>
+                <div style="font-size:0.8em; font-weight:bold; color:#5D4037;">${escapeHtml(pr.period)}</div>
+                <div style="font-size:1.4em; font-weight:bold; color:${getScoreColor(pr.score)};">${escapeHtml(pr.score)}%</div>
             </div>
         `).join('');
         container.innerHTML = `
@@ -2254,7 +2269,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="flex:1; min-width:250px; background:#E3F2FD; border-radius:8px; padding:1rem; border:1px solid #BBDEFB;">
                     <h4 style="margin:0 0 0.5rem; font-size:0.9em; color:#0D47A1;">🔗 検証② 要因整合性</h4>
                     <div style="display:flex; align-items:baseline; gap:0.5rem;">
-                        <span style="font-size:2em; font-weight:bold; color:${getScoreColor(factorResult.consistency)};">${factorResult.consistency}%</span>
+                        <span style="font-size:2em; font-weight:bold; color:${getScoreColor(factorResult.consistency)};">${escapeHtml(factorResult.consistency)}%</span>
                         <span style="font-size:0.85em; color:#1565C0;">(全体スコア)</span>
                     </div>
                     <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">

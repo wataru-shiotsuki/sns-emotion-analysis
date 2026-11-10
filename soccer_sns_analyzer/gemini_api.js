@@ -1,3 +1,5 @@
+// 旧版が保存したキーも削除する。以後はページを開いている間だけ保持する。
+try { localStorage.removeItem('soccer_gemini_api_key'); } catch (error) { /* 保存領域が無効でも解析を続ける */ }
 const GeminiAnalyzer = {
     EMOTIONS: {
         POSITIVE: { name: 'ポジティブ評価', emoji: '😊', color: '#22c55e', keywords: ['最高', 'すごい', 'ナイス', '良い', '素晴らしい'] },
@@ -54,11 +56,12 @@ const GeminiAnalyzer = {
 `,
     MODELS: ['gemini-2.0-flash', 'gemini-1.5-flash'],
     currentModelIndex: 0,
+    _apiKey: '',
     getApiKey() {
-        return localStorage.getItem('soccer_gemini_api_key') || '';
+        return this._apiKey;
     },
     setApiKey(key) {
-        localStorage.setItem('soccer_gemini_api_key', key);
+        this._apiKey = key;
     },
     getCurrentModel() {
         return this.MODELS[this.currentModelIndex];

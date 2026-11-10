@@ -1,3 +1,5 @@
+// 旧版が保存したキーも削除する。以後はページを開いている間だけ保持する。
+try { localStorage.removeItem('gemini_api_key'); } catch (error) { /* 保存領域が無効でも解析を続ける */ }
 const GeminiAnalyzer = {
     EMOTIONS: {
         FEAR: { name: '恐怖', emoji: '🌪️', color: '#dc2626', keywords: ['怖い', '恐ろしい', '逃げ', 'パニック', '死ぬ', '揺れてる'] },
@@ -75,14 +77,15 @@ const GeminiAnalyzer = {
         'gemini-1.5-flash-001'
     ],
     currentModelIndex: 0,
+    _apiKey: '',
     resetModel() {
         this.currentModelIndex = 0;
     },
     getApiKey() {
-        return localStorage.getItem('gemini_api_key') || '';
+        return this._apiKey;
     },
     setApiKey(key) {
-        localStorage.setItem('gemini_api_key', key);
+        this._apiKey = key;
     },
     getPhaseThreshold() {
         return parseInt(localStorage.getItem('phase_threshold') || '6', 10);
@@ -137,7 +140,7 @@ const GeminiAnalyzer = {
         }));
     },
     async detectTopicAndGenerateRules(posts, apiKey) {
-        const samplePosts = posts.slice(0, 50).map(p => p.text).join('\n');
+        const samplePosts = posts.slice(0, 100).map(p => p.text).join('\n');
         const prompt = `あなたは災害時SNS分析の専門家です。以下のSNSデータを分析し、JSON形式で出力してください。
 【タスク】
 1. **災害トピック特定**: このデータの災害種別（地震/火災/豪雨など）と具体的な事象を特定してください。

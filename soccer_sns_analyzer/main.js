@@ -1,4 +1,23 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+    const safeSavedHtml = html => {
+        const template = document.createElement('template');
+        template.innerHTML = html;
+        const allowed = new Set(['DIV', 'P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+            'STRONG', 'EM', 'BR', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH']);
+        template.content.querySelectorAll('*').forEach(element => {
+            if (!allowed.has(element.tagName)) {
+                element.replaceWith(document.createTextNode(element.textContent));
+                return;
+            }
+            [...element.attributes].forEach(attribute => {
+                if (attribute.name !== 'class') element.removeAttribute(attribute.name);
+            });
+        });
+        return template.innerHTML;
+    };
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
     const fileList = document.getElementById('fileList');
@@ -189,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateFileList() {
         fileList.innerHTML = selectedFiles.map(file => `
             <div class="file-list-item">
-                <span class="file-name">📄 ${file.name}</span>
+                <span class="file-name">📄 ${escapeHtml(file.name)}</span>
                 <span class="file-size">${formatFileSize(file.size)}</span>
             </div>
         `).join('');
@@ -500,8 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         const formatContent = (text) => {
             if (!text) return '<p class="no-data">指示なし</p>';
-            let html = text
-                .replace(/\\n/g, '\n')
+            let html = escapeHtml(text.replace(/\\n/g, '\n'))
                 .replace(/^##\s+(\d+)\.\s*(.+)$/gm, '<h3 class="guide-main-header"><span class="header-num">$1.</span> $2</h3>')
                 .replace(/【アクション】(.+?)(?=\\n|$)/g, '<div class="guide-action-box"><strong>【アクション】</strong>$1</div>')
                 .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -613,9 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
             }
             if (!recovered) {
-                const safeText = (content || '')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
+                const safeText = escapeHtml(content || '')
                     .replace(/\\n/g, '<br>')
                     .replace(/\n/g, '<br>');
                 if (broadcastContent) {
@@ -625,7 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (data.script) {
-            if (broadcastContent) broadcastContent.innerHTML = `<div class="broadcast-text">${data.script.replace(/\n/g, '<br>')}</div>`;
+            if (broadcastContent) broadcastContent.innerHTML = `<div class="broadcast-text">${escapeHtml(data.script).replace(/\n/g, '<br>')}</div>`;
         }
         if (data.conversions && Array.isArray(data.conversions) && logContainer) {
             const logHtml = data.conversions.map(item => `
@@ -633,12 +649,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="conversion-content">
                         <div class="conversion-box sns-box">
                             <div class="box-label"><span class="icon">×</span> SNS表現</div>
-                            <div class="box-text">${item.original}</div>
+                            <div class="box-text">${escapeHtml(item.original)}</div>
                         </div>
                         <div class="conversion-arrow">→</div>
                         <div class="conversion-box broadcast-box">
                             <div class="box-label"><span class="icon">✅</span> 放送表現</div>
-                            <div class="box-text">${item.transformed || item.converted}</div>
+                            <div class="box-text">${escapeHtml(item.transformed || item.converted)}</div>
                         </div>
                     </div>
                     ${item.reason ? (() => {
@@ -649,7 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (item.source && (item.source.includes('資料B') || item.source.includes('民放連') || item.source.includes('報道指針') || item.source.includes('放送基準'))) {
                         badgeClass += ' badge-type-b';
                     }
-                    return `<div class="conversion-reason"><span class="${badgeClass}">${badgeLabel}</span><span class="reason-text">${item.reason}</span></div>`;
+                    return `<div class="conversion-reason"><span class="${badgeClass}">${escapeHtml(badgeLabel)}</span><span class="reason-text">${escapeHtml(item.reason)}</span></div>`;
                 })() : ''}
                 </div>
             `).join('');
@@ -668,8 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ];
             const formatContent = (text) => {
                 if (!text) return '<p class="no-data">指示なし</p>';
-                let html = text
-                    .replace(/\\n/g, '\n')
+                let html = escapeHtml(text.replace(/\\n/g, '\n'))
                     .replace(/^"(.+)"$/gm, '<div class="guide-quote">"$1"</div>')
                     .replace(/^▶\s*(.+)$/gm, '<div class="guide-subheader">▶ $1</div>')
                     .replace(/^■\s*(.+?)：?$/gm, '<div class="guide-item-header">■ $1</div>')
@@ -929,13 +944,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const phaseColor = GeminiAnalyzer.PHASES[post.phaseKey]?.color || '#fff';
             return `
                 <tr onclick="showPostDetail(${index})" style="cursor: pointer">
-                    <td>${post.datetime || '-'}</td>
-                    <td><span style="color: ${phaseColor}">${post.phase || '-'}</span></td>
+                    <td>${escapeHtml(post.datetime || '-')}</td>
+                    <td><span style="color: ${phaseColor}">${escapeHtml(post.phase || '-')}</span></td>
                     <td><span style="color: ${emotionData.color || '#fff'}">${emotionData.emoji || ''} ${emotionData.name || '-'}</span></td>
-                    <td>${(post.text || '').substring(0, 80)}${(post.text || '').length > 80 ? '...' : ''}</td>
+                    <td class="post-text"></td>
                 </tr>
             `;
         }).join('');
+        dataTableBody.querySelectorAll('.post-text').forEach((cell, index) => {
+            const postText = analyzedData[index].text || '';
+            cell.textContent = postText.substring(0, 80) + (postText.length > 80 ? '...' : '');
+        });
     }
     window.showPostDetail = function (index) {
         const post = analyzedData[index];
@@ -997,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </head>
 <body>
     <h1>⚽ サッカー放送支援レポート</h1>
-    <p>試合: ${matchTitleInput.value || '未設定'}</p>
+    <p>試合: ${escapeHtml(matchTitleInput.value || '未設定')}</p>
     <p>生成日時: ${new Date().toLocaleString('ja-JP')}</p>
     <h2>📋 行動方針</h2>
     <div class="section">${document.getElementById('guidanceContainer')?.innerHTML || ''}</div>
@@ -1062,7 +1081,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.className = 'history-item';
                 div.innerHTML = `
                     <div class="history-info">
-                        <div class="history-name">${item.name}</div>
+                        <div class="history-name">${escapeHtml(item.name)}</div>
                         <div class="history-meta">
                             ${item.count}件 | ${new Date(item.savedAt).toLocaleString('ja-JP')}
                         </div>
@@ -1100,10 +1119,10 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPhaseStats();
             const guidanceContainer = document.getElementById('guidanceContainer');
             if (guidanceContainer) {
-                guidanceContainer.innerHTML = item.guidanceContent || item.htGuidance || '<div class="placeholder">データなし</div>';
+                guidanceContainer.innerHTML = safeSavedHtml(item.guidanceContent || item.htGuidance || '<div class="placeholder">データなし</div>');
             }
             if (broadcastContent) {
-                broadcastContent.innerHTML = item.broadcastContent || '<div class="placeholder">データなし</div>';
+                broadcastContent.innerHTML = safeSavedHtml(item.broadcastContent || '<div class="placeholder">データなし</div>');
             }
             matchTitleInput.value = item.matchTitle || '';
             historyModal.classList.add('hidden');
